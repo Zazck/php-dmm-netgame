@@ -13,14 +13,14 @@ require 'vendor/autoload.php';
 date_default_timezone_set("Asia/Tokyo");
 
 class Config {
-  // &#21551;用或者&#20851;&#38381;"模&#25311;地区Cookies" &#21551;用: true  禁用: false
-  // 中国大&#38470;服&#21153;器无效, 其余区域尚不明&#30830;
+  // 启用或者关闭"模拟地区Cookies" 启用: true  禁用: false
+  // 中国大陆服务器无效, 其余区域尚不明确
   // use fake cookies if server doesn't have a Japan IP. available value: true / false
   public const fakeCookies = false;
-  // 防止其他'网站'&#20266;造&#35831;求, 不能防止本地&#24212;用&#20266;造&#35831;求, 用自己的站点网址替&#25442;, 中括号, 引号以及逗号必&#39035;&#20026;英文半角符号
+  // 防止其他'网站'伪造请求, 不能防止本地应用伪造请求, 用自己的站点网址替换, 中括号, 引号以及逗号必须为英文半角符号
   // whitelist for cross site requests
   public const allowed = ['http://localhost:3000', 'http://localhost:4200', 'http://react.dmm.zazck.work', 'http://dmm.zazck.work']; 
-  // cacert.pem&#35777;&#20070;文件位置, &#35774;置&#20026; '' 后会使用php&#35774;置的默&#35748;&#35777;&#20070;. 能使用默&#35748;&#35777;&#20070;尽量使用默&#35748;&#35777;&#20070;, 范例: linux: '~/cacert.pem', windows: 'C:\Users\username\cacert.pem'
+  // cacert.pem证书文件位置, 设置为 '' 后会使用php设置的默认证书. 能使用默认证书尽量使用默认证书, 范例: linux: '~/cacert.pem', windows: 'C:\Users\username\cacert.pem'
   // the path to your cacert. example: linux: '~/cacert.pem', windows: 'C:\Users\username\cacert.pem'
   public const customPemFile = '';
 }
@@ -238,18 +238,6 @@ class API {
       return '';
     }
 
-    /*
-    $startSymbol = strpos($data, $before, $start + strlen($search));
-    if ($startSymbol === false) {
-      return '';
-    }
-    $startPos = $startSymbol + strlen($before);
-
-    $endSymbol = strpos($data, $after, $startPos);
-    if ($endSymbol === false) {
-      return '';
-    }
-    */
     return $this->match_symbol_pair($before, $after, $data, $start + strlen($search));
   }
 
@@ -271,7 +259,7 @@ class API {
 
   private function response($result, $data = ''): void {
     if (Config::fakeCookies === true) {
-      /** @var [][] $cookies &#33719;取的Cookies列表, 独立于cookie_jar, 可能被&#36716;&#25442;成了全数&#32452;的形式 */
+      /** @var [][] $cookies 获取的Cookies列表, 独立于cookie_jar, 可能被转换成了全数组的形式 */
       $cookies = $this->cookie_jar->toArray();
       $this->cookie_jar->clear();
       foreach ($cookies as $cookie) {
@@ -321,96 +309,6 @@ class API {
 
     return Result::OK;
   }
-
-  /* private function get_dmm_tokens_orig(): int {
-    $this->cookie_jar->clearSessionCookies(); // make sure cookie is clean after expired
-    $url = '';
-    $response = $this->client->get(sprintf(Constants::urls['www']['login'], Session::$app_base), [
-      'on_stats' => function (\GuzzleHttp\TransferStats $stats) use (&$url) {
-        $url = $stats->getEffectiveUri();
-      },
-    ]);
-    $urlStart = strpos($url, '//') + 2;
-    $responseHost = substr($url, $urlStart, strpos($url, '/', $urlStart) - $urlStart);
-    Session::$login_sub_site = substr($responseHost, 0, strpos($responseHost, '.'));
-
-    if ($response->getStatusCode() >= 400) {
-      return Result::NETWORK_ERROR;
-    }
-
-    $responseBody = (string)$response->getBody();
-
-    if (strpos($responseBody, Constants::keywords['force_redirect']) !== false) {
-      return Result::DMM_FORCE_REDIRECT;
-    }
-
-    $match = $this->match_double_quotes_after($responseBody, Constants::keywords[Session::$login_sub_site]['dmm_token']);
-
-    if (strlen($match) > 0) {
-      User::$dmm_token = $match;
-    } else {
-      return Result::DMM_TOKEN_NOT_FOUND;
-    }
-
-    $match = $this->match_double_quotes_after($responseBody, Constants::keywords[Session::$login_sub_site]['token']);
-
-    if (strlen($match) > 0) {
-      User::$token = $match;
-    } else {
-      return Result::TOKEN_NOT_FOUND;
-    }
-
-    return Result::OK;
-  } */
-
-  /* private function get_ajax_token(): int {
-    $headers = [
-      'Origin' => 'https://'.Session::$login_sub_site.'.'.Session::$app_base,
-      'Referer' => sprintf(Constants::urls[Session::$login_sub_site]['login'], Session::$app_base),
-      Constants::keywords[Session::$login_sub_site]['header_dmm_token'] => User::$dmm_token,
-      Constants::keywords[Session::$login_sub_site]['header_xhr'] => 'XMLHttpRequest'
-    ];
-    $xsrf_token = $this->cookie_jar->getCookieByName('X-XSRF-TOKEN');
-    if ($xsrf_token !== null) {
-      $headers['X-XSRF-TOKEN'] = $xsrf_token;
-    }
-    $data = ['token' => User::$token];
-    $response = $this->client
-      ->post(sprintf(Constants::urls[Session::$login_sub_site]['ajax'], Session::$app_base), [
-        'form_params' => $data, 
-        'headers' => $headers
-      ]);
-    if ($response->getStatusCode() >= 400) {
-      return Result::NETWORK_ERROR;
-    }
-
-    $responseBody = (string)$response->getBody();
-    
-    $json = json_decode($responseBody, true);
-
-    if ($json === null) {
-      return Result::DMM_METHOD_CHANGED;
-    }
-
-    $body = null;
-    if (isset($json['body'])) {
-      $body = &$json['body'];
-    } else {
-      $body = &$json;
-    }
-
-    if (!isset($body['token']) ||
-        !isset($body['login_id']) ||
-        !isset($body['password'])) {
-      return Result::DMM_METHOD_CHANGED;
-    }
-
-    User::$token = $body['token'];
-    User::$idKey = $body['login_id'];
-    User::$pwKey = $body['password'];
-
-    return Result::OK;
-  } */
 
   private function authenticate() {
     $headers = [
